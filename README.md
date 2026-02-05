@@ -1,0 +1,1 @@
+# loup-garou_2026-V7
