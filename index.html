@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loup-Garou - Jeu Multijoueur</title>
+    <meta name="theme-color" content="#7c3aed">
+    <meta name="description" content="Jeu du Loup-Garou multijoueur en temps réel">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Loup-Garou">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&display=swap" rel="stylesheet">
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .cinzel {
+            font-family: 'Cinzel', serif;
+        }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fade-in 0.6s ease-out;
+        }
+
+        @keyframes pulse-glow {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        .bg-pattern {
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDE2YzAtMy4zMTQgMi42ODYtNiA2LTZzNi0yLjY4NiA2LTYtMi42ODYtNi02LTYtNiAyLjY4Ni02IDYgMi42ODYgNiA2IDZ6Ii8+PC9nPjwvZz48L3N2Zz4=');
+        }
+
+        .night-bg {
+            background: linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);
+        }
+
+        .day-bg {
+            background: linear-gradient(to bottom right, #fef3c7, #fde68a, #fbbf24);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <div class="absolute inset-0 bg-pattern opacity-30"></div>
+    <div id="app"></div>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDNRsFPDUDg5NzArWXxc6MQGYNTTAQdOxI",
+            authDomain: "loupgarou2016.firebaseapp.com",
+            databaseURL: "https://loupgarou2016-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "loupgarou2016",
+            storageBucket: "loupgarou2016.firebasestorage.app",
+            messagingSenderId: "124320980678",
+            appId: "1:124320980678:web:5c27d4568027efbf4841c7"
+        };
+
+        let db;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+            console.log('✅ Firebase connecté');
+        } catch (error) {
+            console.error('❌ Erreur Firebase:', error);
+        }
+
+        const Moon = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>;
+        const Sun = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
+        const Users = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
+        const Crown = (props) => <svg className={props.className} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" /></svg>;
+        const Eye = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>;
+        const Droplet = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>;
+        const Target = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+        const Cross = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
+        const Skull = (props) => <svg className={props.className} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 16a1 1 0 01-1-1v-1h2v1a1 1 0 01-1 1z" clipRule="evenodd" /></svg>;
+        const AlertCircle = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+        const Copy = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>;
+        const Check = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>;
+        const LogOut = (props) => <svg className={props.className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
+
+        const roles = [
+            { id: 'loupGarou', name: 'Loup-Garou', icon: Moon, color: '#dc2626', description: 'Tue un villageois chaque nuit' },
+            { id: 'villageois', name: 'Villageois', icon: Users, color: '#10b981', description: 'Vote pendant la journée' },
+            { id: 'voyante', name: 'Voyante', icon: Eye, color: '#8b5cf6', description: 'Voit UNE carte par nuit' },
+            { id: 'sorciere', name: 'Sorcière', icon: Droplet, color: '#ec4899', description: 'Peut sauver OU tuer (1 fois chacun)' },
+            { id: 'chasseur', name: 'Chasseur', icon: Target, color: '#f59e0b', description: 'Tire sur quelqu\'un en mourant' },
+            { id: 'pretre', name: 'Prêtre', icon: Cross, color: '#06b6d4', description: 'Bénit une personne chaque nuit' }
+        ];
+
+        const LoupGarou = () => {
+            const [screen, setScreen] = useState('home');
+            const [playerName, setPlayerName] = useState('');
+            const [roomCode, setRoomCode] = useState('');
+            const [currentRoom, setCurrentRoom] = useState(null);
+            const [players, setPlayers] = useState([]);
+            const [isHost, setIsHost] = useState(false);
+            const [gameState, setGameState] = useState(null);
+            const [copied, setCopied] = useState(false);
+            const [error, setError] = useState('');
+            const [nightTimer, setNightTimer] = useState(60);
+            const [voteTimer, setVoteTimer] = useState(30);
+            const [leaderVoteTimer, setLeaderVoteTimer] = useState(30);
+            const roomRef = useRef(null);
+            const [sorciereNotification, setSorciereNotification] = useState(null);
+            const [showRole, setShowRole] = useState(false);
+            const [selectedLeader, setSelectedLeader] = useState(null);
+
+            const [roleConfig, setRoleConfig] = useState({
+                loupGarou: 2, villageois: 2, voyante: 1, sorciere: 1, chasseur: 1, pretre: 0
+            });
+
+            // Récupération de la session au chargement
+            useEffect(() => {
+                const pathParts = window.location.pathname.split('/');
+                const urlRoomCode = pathParts[1];
+                const savedPlayerName = localStorage.getItem('loupgarou_playerName');
+                const savedRoomCode = localStorage.getItem('loupgarou_roomCode');
+                const savedIsHost = localStorage.getItem('loupgarou_isHost') === 'true';
+
+                if (urlRoomCode && urlRoomCode.length === 6 && /^\d+$/.test(urlRoomCode)) {
+                    setRoomCode(urlRoomCode);
+                    if (savedPlayerName) {
+                        setPlayerName(savedPlayerName);
+                        setIsHost(savedIsHost);
+                    }
+                } else if (savedRoomCode && savedPlayerName) {
+                    setRoomCode(savedRoomCode);
+                    setPlayerName(savedPlayerName);
+                    setIsHost(savedIsHost);
+                    window.history.pushState({}, '', `/${savedRoomCode}`);
+                }
+            }, []);
+
+            useEffect(() => {
+                if (!roomCode || !db) return;
+                roomRef.current = db.ref(`rooms/${roomCode}`);
+                const listener = roomRef.current.on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        setCurrentRoom(data);
+                        setPlayers(data.players || []);
+                        if (data.gameState) {
+                            setGameState(data.gameState);
+                            if (data.status === 'playing' && screen !== 'game') setScreen('game');
+                        }
+                    }
+                });
+                return () => { if (roomRef.current) roomRef.current.off('value', listener); };
+            }, [roomCode]);
+
+            useEffect(() => {
+                if (gameState?.phase === 'night' && gameState?.nightTimer !== undefined) {
+                    setNightTimer(gameState.nightTimer);
+                }
+            }, [gameState?.phase, gameState?.nightTimer]);
+
+            // Vérifier si tous les rôles actifs ont fait leurs actions
+            useEffect(() => {
+                if (gameState?.phase === 'night' && isHost) {
+                    const allActiveRolesActed = checkAllActiveRolesActed();
+                    if (allActiveRolesActed) {
+                        // Tous les rôles ont agi, terminer la nuit
+                        endNight();
+                    }
+                }
+            }, [gameState?.phase, gameState?.players, gameState?.nightActions]);
+
+            const checkAllActiveRolesActed = () => {
+                if (!gameState || gameState.phase !== 'night') return false;
+
+                // Récupérer tous les rôles vivants dans la partie
+                const alivePlayers = gameState.players.filter(p => p.isAlive);
+                const rolesPresent = new Set(alivePlayers.map(p => p.role));
+
+                // Loups-garous : vérifier si tous ont voté
+                if (rolesPresent.has('loupGarou')) {
+                    const wolves = alivePlayers.filter(p => p.role === 'loupGarou');
+                    const wolvesVoted = wolves.filter(p => p.hasActed || gameState.nightActions?.loupVotes?.[p.id]);
+                    if (wolvesVoted.length < wolves.length) return false;
+                }
+
+                // Voyante : vérifier si elle a agi
+                if (rolesPresent.has('voyante')) {
+                    const seer = alivePlayers.find(p => p.role === 'voyante');
+                    if (seer && !seer.hasActed) return false;
+                }
+
+                // Prêtre : vérifier s'il a agi
+                if (rolesPresent.has('pretre')) {
+                    const priest = alivePlayers.find(p => p.role === 'pretre');
+                    if (priest && !priest.hasActed) return false;
+                }
+
+                // Sorcière : cas spécial - doit avoir agi OU avoir déjà utilisé ses 2 potions
+                if (rolesPresent.has('sorciere')) {
+                    const witch = alivePlayers.find(p => p.role === 'sorciere');
+                    if (witch) {
+                        const hasUsedBothPotions = witch.sorciereHealUsed && witch.sorciereKillUsed;
+                        if (!witch.hasActed && !hasUsedBothPotions) return false;
+                    }
+                }
+
+                return true;
+            };
+
+            useEffect(() => {
+                if (gameState?.phase === 'vote' && voteTimer > 0) {
+                    const timer = setTimeout(() => setVoteTimer(voteTimer - 1), 1000);
+                    return () => clearTimeout(timer);
+                } else if (gameState?.phase === 'vote' && voteTimer === 0 && isHost) {
+                    endVoting();
+                }
+                // Terminer le vote si tout le monde a voté
+                if (gameState?.phase === 'vote' && isHost) {
+                    const alivePlayers = gameState.players?.filter(p => p.isAlive) || [];
+                    const allVoted = alivePlayers.every(p => p.hasVoted);
+                    if (allVoted && alivePlayers.length > 0) {
+                        endVoting();
+                    }
+                }
+            }, [gameState?.phase, voteTimer, gameState?.players]);
+
+            // Auto-elect leader when all alive players have voted or timer ends
+            useEffect(() => {
+                if (gameState?.phase === 'voteLeader' && gameState?.leaderVoteTimer !== undefined) {
+                    setLeaderVoteTimer(gameState.leaderVoteTimer);
+                    if (gameState.leaderVoteTimer === 0 && isHost) {
+                        electLeader();
+                    }
+                }
+                if (gameState?.phase === 'voteLeader' && isHost) {
+                    const alivePlayers = gameState.players?.filter(p => p.isAlive) || [];
+                    const allVoted = alivePlayers.every(p => p.hasVoted);
+                    if (allVoted && alivePlayers.length > 0) {
+                        electLeader();
+                    }
+                }
+            }, [gameState?.phase, gameState?.players, gameState?.leaderVoteTimer]);
+
+            // Timer de vote leader côté host uniquement
+            useEffect(() => {
+                if (gameState?.phase === 'voteLeader' && isHost && gameState?.leaderVoteTimer > 0) {
+                    const timer = setTimeout(async () => {
+                        const newGameState = JSON.parse(JSON.stringify(gameState));
+                        newGameState.leaderVoteTimer = gameState.leaderVoteTimer - 1;
+                        try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+                    }, 1000);
+                    return () => clearTimeout(timer);
+                }
+            }, [gameState?.phase, gameState?.leaderVoteTimer, isHost]);
+
+            const generateRoomCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+            const createRoom = async () => {
+                if (!playerName.trim()) { setError('Entrez votre nom'); return; }
+                if (!db) { setError('Firebase non configuré'); return; }
+                const code = generateRoomCode();
+                const room = { code, host: playerName, players: [{ name: playerName, id: Date.now().toString(), isAlive: true }], status: 'lobby', createdAt: Date.now() };
+                try {
+                    await db.ref(`rooms/${code}`).set(room);
+                    setRoomCode(code); setCurrentRoom(room); setIsHost(true); setPlayers(room.players); setScreen('lobby'); setError('');
+                    // Sauvegarder dans localStorage et mettre à jour l'URL
+                    localStorage.setItem('loupgarou_playerName', playerName);
+                    localStorage.setItem('loupgarou_roomCode', code);
+                    localStorage.setItem('loupgarou_isHost', 'true');
+                    window.history.pushState({}, '', `/${code}`);
+                } catch (err) { setError('Erreur: ' + err.message); }
+            };
+
+            const joinRoom = async () => {
+                if (!playerName.trim() || !roomCode.trim()) { setError('Entrez votre nom et le code'); return; }
+                if (!db) { setError('Firebase non configuré'); return; }
+                try {
+                    const snapshot = await db.ref(`rooms/${roomCode}`).once('value');
+                    const room = snapshot.val();
+                    if (!room) { setError('Salon introuvable'); return; }
+                    if (room.status !== 'lobby') { setError('❌ La partie a déjà commencé ! Impossible de rejoindre.'); return; }
+                    const nameExists = room.players.some(p => p.name === playerName);
+                    if (nameExists) { setError('❌ Ce nom est déjà pris !'); return; }
+                    room.players.push({ name: playerName, id: Date.now().toString(), isAlive: true });
+                    await db.ref(`rooms/${roomCode}`).set(room);
+                    setCurrentRoom(room); setPlayers(room.players); setIsHost(false); setScreen('lobby'); setError('');
+                    // Sauvegarder dans localStorage et mettre à jour l'URL
+                    localStorage.setItem('loupgarou_playerName', playerName);
+                    localStorage.setItem('loupgarou_roomCode', roomCode);
+                    localStorage.setItem('loupgarou_isHost', 'false');
+                    window.history.pushState({}, '', `/${roomCode}`);
+                } catch (err) { setError('Erreur: ' + err.message); }
+            };
+
+            const leaveRoom = async () => {
+                if (isHost && db) {
+                    try { await db.ref(`rooms/${roomCode}`).remove(); } catch (err) { }
+                } else if (db && currentRoom) {
+                    try {
+                        const newPlayers = currentRoom.players.filter(p => p.name !== playerName);
+                        await db.ref(`rooms/${roomCode}/players`).set(newPlayers);
+                    } catch (err) { }
+                }
+                setScreen('home'); setCurrentRoom(null); setRoomCode(''); setPlayers([]); setGameState(null);
+                // Nettoyer localStorage et URL
+                localStorage.removeItem('loupgarou_playerName');
+                localStorage.removeItem('loupgarou_roomCode');
+                localStorage.removeItem('loupgarou_isHost');
+                window.history.pushState({}, '', '/');
+            };
+
+            const copyRoomCode = () => {
+                navigator.clipboard.writeText(roomCode);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            };
+
+            const startGame = async () => {
+                if (!db) return;
+                const totalRoles = Object.values(roleConfig).reduce((a, b) => a + b, 0);
+                if (totalRoles !== players.length) { setError(`Configurez ${players.length} rôles`); return; }
+                const deck = [];
+                Object.entries(roleConfig).forEach(([role, count]) => {
+                    for (let i = 0; i < count; i++) deck.push(role);
+                });
+                const shuffled = deck.sort(() => Math.random() - 0.5);
+                const playersWithRoles = players.map((player, index) => ({
+                    ...player,
+                    role: shuffled[index],
+                    isAlive: true,
+                    hasVoted: false,
+                    hasActed: false,
+                    sorciereKillUsed: false,
+                    sorciereHealUsed: false,
+                    voyanteSeen: false,
+                    lastBlessedId: null
+                }));
+                const newGameState = { players: playersWithRoles, phase: 'sleep', round: 1, nightActions: {}, dayMessage: 'Le village s\'endort...', villageLeader: null };
+                try {
+                    await db.ref(`rooms/${roomCode}`).update({ status: 'playing', gameState: newGameState });
+                    setGameState(newGameState); setScreen('game'); setError('');
+                    setTimeout(() => startNight(), 3000);
+                } catch (err) { setError('Erreur: ' + err.message); }
+            };
+
+            const startNight = async () => {
+                console.log('🌙 startNight appelée');
+                console.log('🌙 isHost:', isHost);
+                console.log('🌙 gameState avant copie:', gameState);
+
+                if (!db || !isHost) {
+                    console.log('❌ Pas DB ou pas host');
+                    return;
+                }
+
+                // Récupérer l'état du jeu depuis Firebase pour être sûr d'avoir les dernières données
+                const snapshot = await db.ref(`rooms/${roomCode}/gameState`).once('value');
+                const currentGameState = snapshot.val();
+                console.log('🌙 gameState depuis Firebase:', currentGameState);
+
+                if (!currentGameState || !currentGameState.players) {
+                    console.error('❌ gameState invalide depuis Firebase');
+                    return;
+                }
+
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(currentGameState));
+                console.log('🌙 newGameState copié:', newGameState);
+                console.log('🌙 newGameState.players:', newGameState.players);
+
+                newGameState.phase = 'night';
+                newGameState.nightActions = {};
+                newGameState.dayMessage = 'La nuit tombe... Chaque rôle agit en silence.';
+
+                if (newGameState.players && Array.isArray(newGameState.players)) {
+                    newGameState.players.forEach(p => {
+                        p.hasActed = false;
+                        p.hasVoted = false;
+                        p.voyanteSeen = false;
+                    });
+                    console.log('✅ Players forEach réussi');
+                } else {
+                    console.error('❌ players n\'est pas un tableau:', newGameState.players);
+                }
+
+                console.log('🌙 Tentative set Firebase...');
+                try {
+                    await db.ref(`rooms/${roomCode}/gameState`).set(newGameState);
+                    console.log('✅ startNight Firebase success');
+                } catch (err) {
+                    console.error('❌ startNight Firebase error:', err);
+                }
+            };
+
+            const nightAction = async (targetId, actionType) => {
+                console.log('🔥 nightAction appelée - Target:', targetId, 'Type:', actionType);
+                console.log('🔥 playerName:', playerName);
+                console.log('🔥 roomCode:', roomCode);
+                console.log('🔥 gameState:', gameState);
+
+                if (!db) {
+                    console.error('❌ DB non disponible');
+                    return;
+                }
+
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                console.log('🔥 newGameState copié:', newGameState);
+
+                const currentPlayer = newGameState.players.find(p => p.name === playerName);
+                console.log('🔥 currentPlayer trouvé:', currentPlayer);
+
+                if (!currentPlayer || !currentPlayer.isAlive) {
+                    console.error('❌ Joueur non trouvé ou mort');
+                    return;
+                }
+
+                if (actionType === 'loup') {
+                    console.log('🐺 Action loup');
+                    if (currentPlayer.role !== 'loupGarou') {
+                        console.error('❌ Pas un loup-garou, rôle:', currentPlayer.role);
+                        return;
+                    }
+                    const target = newGameState.players.find(p => p.id === targetId);
+                    console.log('🐺 Target trouvée:', target);
+                    if (target && target.role === 'loupGarou') {
+                        console.log('❌ Target est un loup');
+                        alert('❌ Vous ne pouvez pas tuer un autre loup !');
+                        return;
+                    }
+                    if (!newGameState.nightActions) newGameState.nightActions = {};
+                    if (!newGameState.nightActions.loupVotes) newGameState.nightActions.loupVotes = {};
+                    newGameState.nightActions.loupVotes[currentPlayer.id] = targetId;
+                    currentPlayer.hasActed = true;
+                    console.log('✅ Vote loup enregistré dans state');
+                    alert('✅ Votre vote a été enregistré !');
+                } else if (actionType === 'voyante') {
+                    console.log('🔮 Action voyante');
+                    if (currentPlayer.role !== 'voyante') {
+                        console.error('❌ Pas une voyante, rôle:', currentPlayer.role);
+                        return;
+                    }
+                    if (currentPlayer.voyanteSeen) {
+                        console.log('❌ Voyante a déjà vu');
+                        return;
+                    }
+                    const target = newGameState.players.find(p => p.id === targetId);
+                    console.log('🔮 Target trouvée:', target);
+                    if (target) {
+                        alert(`🔮 ${target.name} est ${roles.find(r => r.id === target.role)?.name}`);
+                        currentPlayer.voyanteSeen = true;
+                        currentPlayer.hasActed = true;
+                        console.log('✅ Vision enregistrée dans state');
+                    }
+                } else if (actionType === 'pretre') {
+                    console.log('✝️ Action prêtre');
+                    if (currentPlayer.role !== 'pretre') {
+                        console.error('❌ Pas un prêtre, rôle:', currentPlayer.role);
+                        return;
+                    }
+                    if (currentPlayer.lastBlessedId === targetId) {
+                        console.log('❌ Même personne que la nuit dernière');
+                        alert('❌ Vous ne pouvez pas bénir la même personne deux nuits de suite !');
+                        return;
+                    }
+                    if (!newGameState.nightActions) newGameState.nightActions = {};
+                    newGameState.nightActions.blessed = targetId;
+                    currentPlayer.lastBlessedId = targetId;
+                    currentPlayer.hasActed = true;
+                    console.log('✅ Bénédiction enregistrée dans state');
+                    alert('✅ Bénédiction accordée !');
+                }
+
+                console.log('🔥 Tentative d\'enregistrement Firebase...');
+                console.log('🔥 newGameState avant envoi:', JSON.stringify(newGameState, null, 2));
+
+                try {
+                    await db.ref(`rooms/${roomCode}/gameState`).set(newGameState);
+                    console.log('✅✅✅ Action enregistrée dans Firebase:', actionType);
+                } catch (err) {
+                    console.error('❌❌❌ Erreur Firebase:', err);
+                    alert('❌ Erreur lors de l\'enregistrement !');
+                }
+            };
+
+            const sorciereAction = async (actionType, targetId = null) => {
+                console.log('🧙 sorciereAction appelée - Type:', actionType, 'Target:', targetId);
+
+                if (!db) {
+                    console.error('❌ DB non disponible');
+                    return;
+                }
+
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                console.log('🧙 newGameState copié:', newGameState);
+
+                const currentPlayer = newGameState.players.find(p => p.name === playerName);
+                console.log('🧙 currentPlayer:', currentPlayer);
+
+                if (currentPlayer.role !== 'sorciere' || !currentPlayer.isAlive) {
+                    console.error('❌ Pas une sorcière ou morte');
+                    return;
+                }
+
+                if (actionType === 'heal') {
+                    console.log('💚 Tentative de sauver');
+                    if (currentPlayer.sorciereHealUsed) {
+                        console.log('❌ Potion déjà utilisée');
+                        alert('❌ Vous avez déjà utilisé votre potion de vie !');
+                        return;
+                    }
+                    if (!newGameState.nightActions) newGameState.nightActions = {};
+                    newGameState.nightActions.sorciereHeal = true;
+                    currentPlayer.sorciereHealUsed = true;
+                    currentPlayer.hasActed = true;
+                    console.log('✅ Heal enregistré dans state');
+                    alert('✅ Potion de vie utilisée ! La victime sera sauvée.');
+                } else if (actionType === 'kill') {
+                    console.log('☠️ Tentative d\'empoisonner');
+                    if (currentPlayer.sorciereKillUsed) {
+                        console.log('❌ Potion déjà utilisée');
+                        alert('❌ Vous avez déjà utilisé votre potion de mort !');
+                        return;
+                    }
+                    if (!newGameState.nightActions) newGameState.nightActions = {};
+                    newGameState.nightActions.sorciereKill = targetId;
+                    currentPlayer.sorciereKillUsed = true;
+                    currentPlayer.hasActed = true;
+                    console.log('✅ Kill enregistré dans state, target:', targetId);
+                    alert('✅ Potion de mort utilisée !');
+                } else if (actionType === 'pass') {
+                    console.log('⏭️ Pass');
+                    currentPlayer.hasActed = true;
+                    alert('✅ Vous passez votre tour.');
+                }
+
+                console.log('🔥 Tentative d\'enregistrement Firebase sorcière...');
+                console.log('🔥 newGameState avant envoi:', JSON.stringify(newGameState, null, 2));
+
+                try {
+                    await db.ref(`rooms/${roomCode}/gameState`).set(newGameState);
+                    console.log('✅✅✅ Action sorcière enregistrée:', actionType);
+                } catch (err) {
+                    console.error('❌❌❌ Erreur Firebase sorcière:', err);
+                    alert('❌ Erreur lors de l\'enregistrement !');
+                }
+            };
+
+            const endNight = async () => {
+                console.log('🌅 endNight appelée');
+                if (!db || !isHost) {
+                    console.log('❌ Pas DB ou pas host');
+                    return;
+                }
+
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                console.log('🌅 newGameState copié:', newGameState);
+
+                let killedByWolves = null;
+                if (newGameState.nightActions && newGameState.nightActions.loupVotes) {
+                    const votes = Object.values(newGameState.nightActions.loupVotes);
+                    const voteCounts = {};
+                    votes.forEach(id => voteCounts[id] = (voteCounts[id] || 0) + 1);
+                    const maxVotes = Math.max(...Object.values(voteCounts));
+                    const candidates = Object.keys(voteCounts).filter(id => voteCounts[id] === maxVotes);
+                    killedByWolves = candidates[Math.floor(Math.random() * candidates.length)];
+                    console.log('🐺 Victime des loups:', killedByWolves);
+                }
+
+                const savedByPriest = newGameState.nightActions && newGameState.nightActions.blessed === killedByWolves;
+                const savedByWitch = killedByWolves && newGameState.nightActions && newGameState.nightActions.sorciereHeal;
+
+                if (killedByWolves && (savedByWitch || savedByPriest)) {
+                    console.log('💚 Victime sauvée');
+                    killedByWolves = null;
+                }
+
+                let deathMessage = '';
+                if (killedByWolves) {
+                    const victim = newGameState.players.find(p => p.id === killedByWolves);
+                    if (victim) {
+                        victim.isAlive = false;
+                        deathMessage = `☠️ ${victim.name} a été dévoré par les loups-garous ! `;
+                    }
+                }
+
+                if (newGameState.nightActions && newGameState.nightActions.sorciereKill) {
+                    const victim = newGameState.players.find(p => p.id === newGameState.nightActions.sorciereKill);
+                    if (victim) {
+                        victim.isAlive = false;
+                        deathMessage += `☠️ ${victim.name} a été empoisonné par la sorcière ! `;
+                    }
+                }
+
+                if (!killedByWolves && (!newGameState.nightActions || !newGameState.nightActions.sorciereKill)) {
+                    deathMessage = '✨ Personne n\'est mort cette nuit !';
+                }
+
+                const wolves = newGameState.players.filter(p => p.role === 'loupGarou' && p.isAlive);
+                const villagers = newGameState.players.filter(p => p.role !== 'loupGarou' && p.isAlive);
+
+                console.log('🐺 Loups vivants:', wolves.length);
+                console.log('👥 Villageois vivants:', villagers.length);
+
+                if (wolves.length === 0) {
+                    alert('🎉 Les Villageois ont gagné ! Tous les loups sont morts.');
+                    await leaveRoom();
+                    return;
+                }
+
+                // Les loups gagnent si :
+                // 1. Tous les villageois sont morts
+                // 2. Il reste 1 loup et 1 villageois ET le chef est un loup
+                const leaderIsWolf = newGameState.villageLeader && wolves.some(w => w.id === newGameState.villageLeader);
+                if (villagers.length === 0 || (wolves.length === 1 && villagers.length === 1 && leaderIsWolf)) {
+                    alert('🐺 Les Loups-Garous ont gagné !');
+                    await leaveRoom();
+                    return;
+                }
+
+                // Vérifier si un chasseur a été tué pendant la nuit
+                let chasseurKilled = null;
+                const victims = [];
+                if (killedByWolves) {
+                    const victim = newGameState.players.find(p => p.id === killedByWolves);
+                    if (victim && !victim.isAlive) victims.push(victim);
+                }
+                if (newGameState.nightActions && newGameState.nightActions.sorciereKill) {
+                    const victim = newGameState.players.find(p => p.id === newGameState.nightActions.sorciereKill);
+                    if (victim && !victim.isAlive) victims.push(victim);
+                }
+                chasseurKilled = victims.find(v => v.role === 'chasseur');
+
+                // Vérifier si le chef est mort pendant la nuit
+                const leaderKilled = victims.find(v => v.id === newGameState.villageLeader);
+
+                // Si un chasseur a été tué, il tire d'abord
+                if (chasseurKilled) {
+                    newGameState.phase = 'chasseur';
+                    newGameState.chasseurId = chasseurKilled.id;
+                    newGameState.dayMessage = deathMessage;
+                    // Déterminer la phase après le tir du chasseur
+                    if (leaderKilled) {
+                        newGameState.pendingPhase = 'chooseSuccessor';
+                    } else if (newGameState.round === 1 && !newGameState.villageLeader) {
+                        newGameState.pendingPhase = 'voteLeader';
+                    } else {
+                        newGameState.pendingPhase = 'day';
+                    }
+                } else if (leaderKilled) {
+                    // Si le chef est mort, il choisit son successeur
+                    newGameState.phase = 'chooseSuccessor';
+                    newGameState.deadLeaderId = leaderKilled.id;
+                    newGameState.dayMessage = `${deathMessage} 👑 Veuillez choisir votre nouveau chef de village...`;
+                } else if (newGameState.round === 1 && !newGameState.villageLeader) {
+                    // Après la première nuit, voter pour le chef de village (si pas de chasseur mort)
+                    newGameState.phase = 'voteLeader';
+                    newGameState.dayMessage = deathMessage + ' 👑 Élection du chef de village en cours...';
+                    newGameState.leaderVotes = {};
+                    newGameState.leaderVoteTimer = 30;
+                    newGameState.players.forEach(p => p.hasVoted = false);
+                    setSelectedLeader(null);
+                } else {
+                    newGameState.phase = 'day';
+                    newGameState.dayMessage = deathMessage;
+                }
+
+                newGameState.players.forEach(p => {
+                    p.voyanteSeen = false;
+                    p.hasActed = false;
+                });
+
+                console.log('🌅 Passage au jour...');
+                try {
+                    await db.ref(`rooms/${roomCode}/gameState`).set(newGameState);
+                    console.log('✅ endNight Firebase success');
+                } catch (err) {
+                    console.error('❌ Erreur jour:', err);
+                }
+            };
+
+            const startVoting = async () => {
+                if (!db || !isHost) return;
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                newGameState.phase = 'vote';
+                newGameState.votes = {};
+                newGameState.dayMessage = '🗳️ Vote en cours - Qui doit être éliminé ?';
+                newGameState.players.forEach(p => p.hasVoted = false);
+                setVoteTimer(30);
+                try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+            };
+
+            const vote = async (targetId) => {
+                if (!db) return;
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                const voter = newGameState.players.find(p => p.name === playerName);
+                if (!voter || !voter.isAlive || voter.hasVoted) return;
+
+                if (!newGameState.votes) newGameState.votes = {};
+                newGameState.votes[voter.id] = targetId;
+                voter.hasVoted = true;
+
+                try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+            };
+
+            const voteForLeader = async (targetId) => {
+                if (!db) return;
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                const voter = newGameState.players.find(p => p.name === playerName);
+                if (!voter || !voter.isAlive || voter.hasVoted) return;
+
+                if (!newGameState.leaderVotes) newGameState.leaderVotes = {};
+                newGameState.leaderVotes[voter.id] = targetId;
+                voter.hasVoted = true;
+
+                try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+            };
+
+            const electLeader = async () => {
+                if (!db || !isHost) return;
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+
+                const voteCounts = {};
+                const votersForCandidate = {}; // Qui a voté pour qui
+
+                Object.entries(newGameState.leaderVotes || {}).forEach(([voterId, candidateId]) => {
+                    voteCounts[candidateId] = (voteCounts[candidateId] || 0) + 1;
+                    if (!votersForCandidate[candidateId]) votersForCandidate[candidateId] = [];
+                    const voter = newGameState.players.find(p => p.id === voterId);
+                    if (voter) votersForCandidate[candidateId].push(voter.name);
+                });
+
+                let voteDetails = '';
+                Object.entries(voteCounts).forEach(([candidateId, count]) => {
+                    const candidate = newGameState.players.find(p => p.id === candidateId);
+                    const voters = votersForCandidate[candidateId] || [];
+                    voteDetails += `\n${candidate?.name}: ${count} vote(s) (${voters.join(', ')})`;
+                });
+
+                // Si personne n'a voté ou pas de votes, choisir aléatoirement
+                if (Object.keys(voteCounts).length === 0) {
+                    const alivePlayers = newGameState.players.filter(p => p.isAlive);
+                    const electedLeader = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+                    newGameState.villageLeader = electedLeader.id;
+                    newGameState.phase = 'day';
+                    newGameState.dayMessage = `👑 ${electedLeader.name} a été élu(e) chef du village aléatoirement (aucun vote) !`;
+                } else {
+                    const maxVotes = Math.max(...Object.values(voteCounts));
+                    const candidates = Object.keys(voteCounts).filter(id => voteCounts[id] === maxVotes);
+
+                    if (candidates.length > 1) {
+                        // Égalité : sélection aléatoire
+                        const electedLeader = candidates[Math.floor(Math.random() * candidates.length)];
+                        newGameState.villageLeader = electedLeader;
+                        newGameState.phase = 'day';
+                        const leader = newGameState.players.find(p => p.id === electedLeader);
+                        const tiedNames = candidates.map(id => newGameState.players.find(p => p.id === id)?.name).join(', ');
+                        newGameState.dayMessage = `⚖️ Égalité entre ${tiedNames} !\n👑 ${leader?.name} a été élu(e) chef du village par sélection aléatoire !${voteDetails}`;
+                    } else {
+                        // Gagnant unique
+                        const electedLeader = candidates[0];
+                        newGameState.villageLeader = electedLeader;
+                        newGameState.phase = 'day';
+                        const leader = newGameState.players.find(p => p.id === electedLeader);
+                        newGameState.dayMessage = `👑 ${leader?.name} est élu(e) chef du village avec ${maxVotes} vote(s) !${voteDetails}`;
+                    }
+                }
+
+                try {
+                    await db.ref(`rooms/${roomCode}/gameState`).set(newGameState);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            const endVoting = async () => {
+                if (!db || !isHost) return;
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+
+                const voteCounts = {};
+                Object.values(newGameState.votes || {}).forEach(id => {
+                    voteCounts[id] = (voteCounts[id] || 0) + 1;
+                });
+
+                // Si le chef a voté, son vote compte double
+                if (newGameState.villageLeader && newGameState.votes) {
+                    const leaderVote = newGameState.votes[newGameState.villageLeader];
+                    if (leaderVote) {
+                        voteCounts[leaderVote] = (voteCounts[leaderVote] || 0) + 1;
+                    }
+                }
+
+                const maxVotes = Math.max(...Object.values(voteCounts));
+                const tiedPlayers = Object.keys(voteCounts).filter(id => voteCounts[id] === maxVotes);
+
+                if (tiedPlayers.length > 1) {
+                    // Retirer le chef de la liste des égalités s'il en fait partie
+                    const tiedWithoutLeader = tiedPlayers.filter(id => id !== newGameState.villageLeader);
+
+                    if (tiedWithoutLeader.length > 1) {
+                        // S'il reste plus d'un joueur, le chef départage
+                        newGameState.phase = 'tiebreak';
+                        newGameState.tiedPlayers = tiedWithoutLeader;
+                        newGameState.dayMessage = '⚖️ Égalité ! Le chef doit départager...';
+                    } else if (tiedWithoutLeader.length === 1) {
+                        // Un seul joueur restant après exclusion du chef, il est éliminé
+                        const eliminated = newGameState.players.find(p => p.id === tiedWithoutLeader[0]);
+                        if (eliminated) {
+                            eliminated.isAlive = false;
+                            newGameState.dayMessage = `☠️ ${eliminated.name} a été éliminé par le village.`;
+                            if (eliminated.role === 'chasseur') {
+                                newGameState.phase = 'chasseur';
+                                newGameState.chasseurId = eliminated.id;
+                            } else {
+                                // Pause de 10 secondes avant de passer à la nuit
+                                newGameState.phase = 'dayTransition';
+                                newGameState.transitionTimer = 10;
+                            }
+                        }
+                    } else {
+                        // Si seul le chef était en égalité, personne n'est éliminé
+                        newGameState.dayMessage = '⚖️ Le chef ne peut pas être éliminé seul en égalité.';
+                        newGameState.phase = 'dayTransition';
+                        newGameState.transitionTimer = 10;
+                    }
+                } else if (tiedPlayers.length === 1) {
+                    const eliminated = newGameState.players.find(p => p.id === tiedPlayers[0]);
+                    if (eliminated) {
+                        eliminated.isAlive = false;
+
+                        // Si le chef meurt par vote, il choisit son successeur
+                        if (eliminated.id === newGameState.villageLeader) {
+                            newGameState.dayMessage = `☠️ ${eliminated.name} a été éliminé par le village. 👑 Veuillez choisir votre nouveau chef de village...`;
+                            if (eliminated.role === 'chasseur') {
+                                newGameState.phase = 'chasseur';
+                                newGameState.chasseurId = eliminated.id;
+                                newGameState.pendingPhase = 'chooseSuccessor';
+                                newGameState.deadLeaderId = eliminated.id;
+                            } else {
+                                newGameState.phase = 'chooseSuccessor';
+                                newGameState.deadLeaderId = eliminated.id;
+                            }
+                        } else if (eliminated.role === 'chasseur') {
+                            newGameState.dayMessage = `☠️ ${eliminated.name} a été éliminé par le village.`;
+                            newGameState.phase = 'chasseur';
+                            newGameState.chasseurId = eliminated.id;
+                        } else {
+                            newGameState.dayMessage = `☠️ ${eliminated.name} a été éliminé par le village.`;
+                            // Pause de 10 secondes avant de passer à la nuit
+                            newGameState.phase = 'dayTransition';
+                            newGameState.transitionTimer = 10;
+                        }
+                    }
+                } else {
+                    newGameState.dayMessage = 'Personne n\'a été éliminé.';
+                    newGameState.phase = 'dayTransition';
+                    newGameState.transitionTimer = 10;
+                }
+
+                try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+            };
+
+            const tiebreakVote = async (playerId) => {
+                if (!db || !isHost) return;
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                const eliminated = newGameState.players.find(p => p.id === playerId);
+                if (eliminated) {
+                    eliminated.isAlive = false;
+
+                    // Si le chef meurt par départage, il choisit son successeur
+                    if (eliminated.id === newGameState.villageLeader) {
+                        newGameState.dayMessage = `☠️ ${eliminated.name} a été éliminé par décision du chef. 👑 Veuillez choisir votre nouveau chef de village...`;
+                        if (eliminated.role === 'chasseur') {
+                            newGameState.phase = 'chasseur';
+                            newGameState.chasseurId = eliminated.id;
+                            newGameState.pendingPhase = 'chooseSuccessor';
+                            newGameState.deadLeaderId = eliminated.id;
+                        } else {
+                            newGameState.phase = 'chooseSuccessor';
+                            newGameState.deadLeaderId = eliminated.id;
+                        }
+                    } else if (eliminated.role === 'chasseur') {
+                        newGameState.dayMessage = `☠️ ${eliminated.name} a été éliminé par décision du chef.`;
+                        newGameState.phase = 'chasseur';
+                        newGameState.chasseurId = eliminated.id;
+                    } else {
+                        newGameState.dayMessage = `☠️ ${eliminated.name} a été éliminé par décision du chef.`;
+                        newGameState.phase = 'dayTransition';
+                        newGameState.transitionTimer = 10;
+                    }
+                }
+                try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+            };
+
+            const chooseSuccessor = async (successorId) => {
+                if (!db) return;
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                newGameState.villageLeader = successorId;
+                const successor = newGameState.players.find(p => p.id === successorId);
+                newGameState.dayMessage = `👑 Votre nouveau chef de village est : ${successor?.name}`;
+                delete newGameState.deadLeaderId;
+
+                // Vérifier s'il y a une phase en attente (si c'était après un tir de chasseur)
+                if (newGameState.pendingPhase === 'chooseSuccessor') {
+                    delete newGameState.pendingPhase;
+                    newGameState.phase = 'dayTransition';
+                    newGameState.transitionTimer = 10;
+                } else if (newGameState.round === 1) {
+                    // Si c'est le round 1 et que le premier chef est mort, faire l'élection du chef
+                    newGameState.phase = 'voteLeader';
+                    newGameState.leaderVotes = {};
+                    newGameState.leaderVoteTimer = 30;
+                    newGameState.players.forEach(p => p.hasVoted = false);
+                    setSelectedLeader(null);
+                } else {
+                    // Sinon passer à la phase de transition avant la nuit
+                    newGameState.phase = 'dayTransition';
+                    newGameState.transitionTimer = 10;
+                }
+
+                try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+            };
+
+            const chasseurShoot = async (targetId) => {
+                if (!db) return;
+                // Copie profonde de l'état du jeu
+                const newGameState = JSON.parse(JSON.stringify(gameState));
+                const target = newGameState.players.find(p => p.id === targetId);
+                if (target) target.isAlive = false;
+
+                // Vérifier s'il y a une phase en attente
+                if (newGameState.pendingPhase === 'chooseSuccessor') {
+                    newGameState.phase = 'chooseSuccessor';
+                    const deadLeader = newGameState.players.find(p => p.id === newGameState.villageLeader);
+                    newGameState.deadLeaderId = deadLeader.id;
+                    newGameState.dayMessage = `🎯 Le chasseur a abattu ${target.name}. 👑 Veuillez choisir votre nouveau chef de village...`;
+                    delete newGameState.pendingPhase;
+                    try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+                } else if (newGameState.pendingPhase === 'voteLeader') {
+                    newGameState.phase = 'voteLeader';
+                    newGameState.leaderVotes = {};
+                    newGameState.leaderVoteTimer = 30;
+                    newGameState.dayMessage = `🎯 Le chasseur a abattu ${target.name}.`;
+                    newGameState.players.forEach(p => p.hasVoted = false);
+                    setSelectedLeader(null);
+                    delete newGameState.pendingPhase;
+                    try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+                } else {
+                    newGameState.dayMessage = `🎯 Le chasseur a abattu ${target.name}.`;
+                    newGameState.phase = 'dayTransition';
+                    newGameState.transitionTimer = 10;
+                    try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+                }
+            };
+
+            const checkVictoryAndContinue = async (newGameState) => {
+                const wolves = newGameState.players.filter(p => p.role === 'loupGarou' && p.isAlive);
+                const villagers = newGameState.players.filter(p => p.role !== 'loupGarou' && p.isAlive);
+
+                if (wolves.length === 0) {
+                    alert('🎉 Les Villageois ont gagné ! Tous les loups sont morts.');
+                    await leaveRoom();
+                    return;
+                }
+
+                // Les loups gagnent si :
+                // 1. Tous les villageois sont morts
+                // 2. Il reste 1 loup et 1 villageois ET le chef est un loup
+                const leaderIsWolf = newGameState.villageLeader && wolves.some(w => w.id === newGameState.villageLeader);
+                if (villagers.length === 0 || (wolves.length === 1 && villagers.length === 1 && leaderIsWolf)) {
+                    alert('🐺 Les Loups-Garous ont gagné !');
+                    await leaveRoom();
+                    return;
+                }
+
+                newGameState.phase = 'sleep';
+                newGameState.dayMessage = 'Le village s\'endort...';
+                newGameState.round += 1;
+
+                try {
+                    await db.ref(`rooms/${roomCode}/gameState`).set(newGameState);
+                    setTimeout(() => startNight(), 3000);
+                } catch (err) { }
+            };
+
+            if (screen === 'home') {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 relative z-10 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+                        <div className="max-w-md w-full">
+                            <div className="text-center mb-12 animate-fade-in">
+                                <div className="flex justify-center mb-6"><Moon className="w-20 h-20 text-red-500 pulse-glow" /></div>
+                                <h1 className="text-6xl font-black text-white mb-3 cinzel">LOUP-GAROU</h1>
+                                <p className="text-purple-300 text-lg">Le village s'éveille...</p>
+                            </div>
+                            <div className="bg-black/40 backdrop-blur-xl p-8 rounded-3xl border border-purple-500/30">
+                                <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="w-full bg-white/10 text-white border border-purple-500/30 rounded-xl px-4 py-3 mb-4 focus:outline-none" placeholder="Entrez votre nom" />
+                                <button onClick={createRoom} className="w-full bg-gradient-to-r from-red-600 to-purple-600 text-white py-4 px-6 rounded-2xl font-bold mb-3 hover:from-red-500 hover:to-purple-500">
+                                    <Crown className="w-6 h-6 inline mr-3" />Créer un Salon
+                                </button>
+                                <button onClick={() => setScreen('join')} className="w-full bg-white/10 text-white py-4 px-6 rounded-2xl font-bold hover:bg-white/20">
+                                    <Users className="w-6 h-6 inline mr-3" />Rejoindre un Salon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (screen === 'join') {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 relative z-10 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+                        <div className="max-w-md w-full">
+                            <button onClick={() => setScreen('home')} className="text-purple-300 mb-6 hover:text-white">← Retour</button>
+                            <div className="bg-black/40 backdrop-blur-xl p-8 rounded-3xl border border-purple-500/30">
+                                <h2 className="text-3xl font-bold text-white mb-6 cinzel">Rejoindre</h2>
+                                <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="w-full bg-white/10 text-white border border-purple-500/30 rounded-xl px-4 py-3 mb-4 focus:outline-none" placeholder="Votre nom" />
+                                <input type="text" value={roomCode} onChange={(e) => setRoomCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="w-full bg-white/10 text-white border border-purple-500/30 rounded-xl px-4 py-3 mb-4 text-2xl text-center tracking-widest font-bold focus:outline-none" placeholder="000000" maxLength={6} />
+                                {error && <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-xl mb-4">{error}</div>}
+                                <button onClick={joinRoom} className="w-full bg-gradient-to-r from-red-600 to-purple-600 text-white py-4 rounded-2xl font-bold">Rejoindre</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (screen === 'lobby') {
+                return (
+                    <div className="min-h-screen p-4 relative z-10 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+                        <div className="max-w-4xl mx-auto py-8">
+                            <div className="flex justify-between items-center mb-8">
+                                <h2 className="text-3xl font-bold text-white cinzel">Salon d'Attente</h2>
+                                <button onClick={leaveRoom} className="text-red-400 hover:text-red-300"><LogOut className="w-5 h-5" /></button>
+                            </div>
+                            <div className="bg-black/40 backdrop-blur-xl p-8 rounded-3xl border border-purple-500/30 mb-6">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div>
+                                        <p className="text-purple-300 text-sm">Code du salon</p>
+                                        <p className="text-4xl font-bold text-white tracking-wider">{roomCode}</p>
+                                    </div>
+                                    <button onClick={copyRoomCode} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold">
+                                        {copied ? <><Check className="w-5 h-5 inline mr-2" />Copié !</> : <><Copy className="w-5 h-5 inline mr-2" />Copier</>}
+                                    </button>
+                                </div>
+                                <div className="border-t border-white/10 pt-6">
+                                    <p className="text-purple-300 mb-4">Joueurs: {players.length} {players.length < 4 ? '(min 4)' : ''}</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {players.map((player) => (
+                                            <div key={player.id} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center">
+                                                {player.name === currentRoom?.host && <Crown className="w-5 h-5 text-yellow-400 mr-2" />}
+                                                <span className="text-white">{player.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            {isHost && (
+                                <div className="bg-black/40 backdrop-blur-xl p-8 rounded-3xl border border-purple-500/30">
+                                    <h3 className="text-2xl font-bold text-white mb-6">Configuration</h3>
+                                    <div className="grid gap-4 mb-6">
+                                        {roles.map(role => (
+                                            <div key={role.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between">
+                                                <div className="flex items-center">
+                                                    <role.icon className="w-6 h-6 mr-3" style={{ color: role.color }} />
+                                                    <div>
+                                                        <p className="text-white font-bold">{role.name}</p>
+                                                        <p className="text-purple-300 text-sm">{role.description}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    <button onClick={() => setRoleConfig({ ...roleConfig, [role.id]: Math.max(0, roleConfig[role.id] - 1) })} className="bg-white/10 hover:bg-white/20 text-white w-8 h-8 rounded-lg font-bold">-</button>
+                                                    <span className="text-white font-bold w-8 text-center">{roleConfig[role.id]}</span>
+                                                    <button onClick={() => setRoleConfig({ ...roleConfig, [role.id]: roleConfig[role.id] + 1 })} className="bg-white/10 hover:bg-white/20 text-white w-8 h-8 rounded-lg font-bold">+</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {error && <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-xl mb-4">{error}</div>}
+                                    <button onClick={startGame} disabled={players.length < 4} className="w-full bg-gradient-to-r from-red-600 to-purple-600 text-white py-4 rounded-2xl font-bold disabled:opacity-50">
+                                        {players.length < 4 ? `En attente (${players.length}/4)` : 'Lancer la Partie'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (screen === 'game' && gameState) {
+                const currentPlayer = gameState.players.find(p => p.name === playerName);
+                const alivePlayers = gameState.players.filter(p => p.isAlive);
+                const myRole = roles.find(r => r.id === currentPlayer?.role);
+                const isNight = gameState.phase === 'night';
+                const bgClass = isNight || gameState.phase === 'sleep' ? 'night-bg' : 'day-bg';
+                const textColor = isNight || gameState.phase === 'sleep' ? 'text-white' : 'text-gray-900';
+
+                let victimId = null;
+                if (currentPlayer?.role === 'sorciere' && isNight && gameState.nightActions?.loupVotes) {
+                    const votes = Object.values(gameState.nightActions.loupVotes);
+                    const voteCounts = {};
+                    votes.forEach(id => voteCounts[id] = (voteCounts[id] || 0) + 1);
+                    const maxVotes = Math.max(...Object.values(voteCounts));
+                    const candidates = Object.keys(voteCounts).filter(id => voteCounts[id] === maxVotes);
+                    const potentialVictim = candidates[0];
+                    // Ne pas afficher la victime si elle est déjà bénie par le prêtre
+                    const isBlessedByPriest = gameState.nightActions?.blessed === potentialVictim;
+                    victimId = isBlessedByPriest ? null : potentialVictim;
+                }
+
+                return (
+                    <div className={`min-h-screen p-4 relative z-10 ${bgClass}`}>
+                        <div className="max-w-6xl mx-auto py-8">
+                            <div className="bg-black/40 backdrop-blur-xl p-6 rounded-3xl border border-white/20 mb-6">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center space-x-6">
+                                        <div>
+                                            <p className="text-purple-300 text-sm">Tour</p>
+                                            <p className={`text-3xl font-bold ${textColor}`}>{gameState.round}</p>
+                                        </div>
+                                        <div className="h-12 w-px bg-white/20"></div>
+                                        <div>
+                                            <p className="text-purple-300 text-sm">Phase</p>
+                                            <div className="flex items-center">
+                                                {isNight ? <><Moon className="w-6 h-6 text-blue-400 mr-2" /><p className={`text-xl font-bold ${textColor}`}>Nuit</p></> :
+                                                    gameState.phase === 'vote' ? <><Sun className="w-6 h-6 text-yellow-600 mr-2" /><p className="text-xl font-bold text-gray-900">Vote - {voteTimer}s</p></> :
+                                                        gameState.phase === 'voteLeader' ? <><Crown className="w-6 h-6 text-yellow-600 mr-2" /><p className="text-xl font-bold text-gray-900">Élection Chef - {leaderVoteTimer}s</p></> :
+                                                            gameState.phase === 'dayTransition' ? <><Sun className="w-6 h-6 text-yellow-600 mr-2" /><p className="text-xl font-bold text-gray-900">Transition - {gameState.transitionTimer}s</p></> :
+                                                                gameState.phase === 'day' ? <><Sun className="w-6 h-6 text-yellow-600 mr-2" /><p className="text-xl font-bold text-gray-900">Jour</p></> :
+                                                                    <><Moon className="w-6 h-6 text-blue-400 mr-2" /><p className={`text-xl font-bold ${textColor}`}>Transition</p></>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button onClick={leaveRoom} className="text-red-400 hover:text-red-300"><LogOut className="w-6 h-6" /></button>
+                                </div>
+                            </div>
+
+                            {gameState.dayMessage && (
+                                <div className="bg-black/40 backdrop-blur-xl p-6 rounded-3xl border border-white/20 mb-6 text-center">
+                                    <p className={`text-2xl font-bold ${textColor}`}>{gameState.dayMessage}</p>
+                                </div>
+                            )}
+
+                            <div className="bg-black/40 backdrop-blur-xl p-6 rounded-3xl border border-white/20 mb-6">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-purple-300 text-sm">Votre rôle</p>
+                                    <button
+                                        onClick={() => setShowRole(!showRole)}
+                                        className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl font-bold text-sm transition"
+                                    >
+                                        {showRole ? <Eye className="w-4 h-4 inline mr-1" /> : '👁️'} {showRole ? 'Cacher' : 'Afficher'}
+                                    </button>
+                                </div>
+                                {showRole && (
+                                    <div className="flex items-center">
+                                        {myRole && <myRole.icon className="w-8 h-8 mr-3" style={{ color: myRole.color }} />}
+                                        <div>
+                                            <p className={`text-2xl font-bold ${textColor}`}>{myRole?.name}</p>
+                                            <p className="text-purple-300 text-sm">{myRole?.description}</p>
+                                        </div>
+                                    </div>
+                                )}
+                                {!showRole && (
+                                    <p className={`text-lg ${textColor} italic`}>🔒 Rôle masqué - Cliquez pour voir</p>
+                                )}
+                                {!currentPlayer?.isAlive && <div className="mt-4 bg-red-500/20 border border-red-500 text-red-300 px-4 py-2 rounded-xl flex items-center"><Skull className="w-5 h-5 mr-2" />Vous êtes mort - Vous ne pouvez plus jouer</div>}
+                            </div>
+
+                            {isNight && currentPlayer?.isAlive && (
+                                <div className="bg-black/40 backdrop-blur-xl p-6 rounded-3xl border border-white/20 mb-6">
+                                    <h3 className="text-xl font-bold text-white mb-4">
+                                        Actions de nuit
+                                    </h3>
+
+                                    {currentPlayer.role === 'loupGarou' && (
+                                        <>
+                                            <p className="text-purple-300 mb-3">🐺 Choisissez votre victime - La nuit se termine quand tous ont agi</p>
+                                            {currentPlayer.hasActed ? (
+                                                <div className="bg-green-500/20 border border-green-500 text-green-300 px-4 py-3 rounded-xl">
+                                                    <Check className="w-5 h-5 inline mr-2" />Vote enregistré
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {gameState.players.filter(p => p.isAlive && p.role !== 'loupGarou' && p.id !== currentPlayer.id).map(player => (
+                                                        <button
+                                                            key={player.id}
+                                                            onClick={() => {
+                                                                console.log('🖱️ CLIC sur bouton loup:', player.name, player.id);
+                                                                nightAction(player.id, 'loup');
+                                                            }}
+                                                            className="bg-red-600/20 hover:bg-red-600/40 border border-red-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                                        >
+                                                            {player.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {currentPlayer.role === 'voyante' && (
+                                        <>
+                                            <p className="text-purple-300 mb-3">🔮 Regardez UNE carte ou passez votre tour</p>
+                                            {currentPlayer.hasActed ? (
+                                                <div className="bg-green-500/20 border border-green-500 text-green-300 px-4 py-3 rounded-xl">
+                                                    <Check className="w-5 h-5 inline mr-2" />Vision utilisée
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                                        {gameState.players.filter(p => p.isAlive && p.id !== currentPlayer.id).map(player => (
+                                                            <button
+                                                                key={player.id}
+                                                                onClick={() => {
+                                                                    console.log('🖱️ CLIC sur bouton voyante:', player.name, player.id);
+                                                                    nightAction(player.id, 'voyante');
+                                                                }}
+                                                                className="bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                                            >
+                                                                {player.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!db) return;
+                                                            const newGameState = JSON.parse(JSON.stringify(gameState));
+                                                            const currentP = newGameState.players.find(p => p.name === playerName);
+                                                            if (currentP) currentP.hasActed = true;
+                                                            try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+                                                        }}
+                                                        className="w-full bg-gray-600/20 hover:bg-gray-600/40 border border-gray-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                                    >
+                                                        Passer mon tour
+                                                    </button>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {currentPlayer.role === 'pretre' && (
+                                        <>
+                                            <p className="text-purple-300 mb-3">✝️ Bénissez une personne ou passez votre tour</p>
+                                            {currentPlayer.hasActed ? (
+                                                <div className="bg-green-500/20 border border-green-500 text-green-300 px-4 py-3 rounded-xl">
+                                                    <Check className="w-5 h-5 inline mr-2" />Bénédiction donnée
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                                        {gameState.players.filter(p => p.isAlive && p.id !== currentPlayer.id && p.id !== currentPlayer.lastBlessedId).map(player => (
+                                                            <button
+                                                                key={player.id}
+                                                                onClick={() => {
+                                                                    console.log('🖱️ CLIC sur bouton prêtre:', player.name, player.id);
+                                                                    nightAction(player.id, 'pretre');
+                                                                }}
+                                                                className="bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                                            >
+                                                                {player.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!db) return;
+                                                            const newGameState = JSON.parse(JSON.stringify(gameState));
+                                                            const currentP = newGameState.players.find(p => p.name === playerName);
+                                                            if (currentP) currentP.hasActed = true;
+                                                            try { await db.ref(`rooms/${roomCode}/gameState`).set(newGameState); } catch (err) { }
+                                                        }}
+                                                        className="w-full bg-gray-600/20 hover:bg-gray-600/40 border border-gray-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                                    >
+                                                        Passer mon tour
+                                                    </button>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {currentPlayer.role === 'sorciere' && (
+                                        <>
+                                            {currentPlayer.sorciereHealUsed && currentPlayer.sorciereKillUsed ? (
+                                                <div className="bg-gray-500/20 border border-gray-500 text-gray-300 px-4 py-3 rounded-xl">
+                                                    <AlertCircle className="w-5 h-5 inline mr-2" />
+                                                    Vous avez utilisé vos 2 potions. Vous êtes maintenant un simple villageois.
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {victimId && (() => {
+                                                        const victim = gameState.players.find(p => p.id === victimId);
+                                                        return victim ? (
+                                                            <div className="bg-red-900/30 border border-red-500 p-4 rounded-xl mb-4">
+                                                                <p className="text-yellow-300 font-bold mb-3">⚠️ Les loups ont tué: {victim.name}</p>
+                                                                {!currentPlayer.sorciereHealUsed && !gameState.nightActions?.sorciereHeal ? (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            console.log('🖱️ CLIC sur bouton sauver');
+                                                                            sorciereAction('heal');
+                                                                        }}
+                                                                        className="w-full bg-green-600/20 hover:bg-green-600/40 border border-green-500 text-white px-4 py-3 rounded-xl font-bold mb-2 transition"
+                                                                    >
+                                                                        💚 Sauver {victim.name} (1x dans la partie)
+                                                                    </button>
+                                                                ) : currentPlayer.sorciereHealUsed ? (
+                                                                    <div className="bg-gray-500/20 border border-gray-500 text-gray-300 px-4 py-2 rounded-xl mb-2">
+                                                                        Potion de vie déjà utilisée
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="bg-green-500/20 border border-green-500 text-green-300 px-4 py-2 rounded-xl mb-2">
+                                                                        ✅ Vous avez sauvé {victim.name}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+
+                                                    {!currentPlayer.sorciereKillUsed && !gameState.nightActions?.sorciereKill && (
+                                                        <>
+                                                            <p className="text-purple-300 mb-3">☠️ Empoisonner quelqu'un (1x dans la partie)</p>
+                                                            <div className="grid grid-cols-2 gap-3 mb-3">
+                                                                {gameState.players.filter(p => p.isAlive && p.id !== currentPlayer.id).map(player => (
+                                                                    <button
+                                                                        key={player.id}
+                                                                        onClick={() => {
+                                                                            console.log('🖱️ CLIC sur bouton empoisonner:', player.name, player.id);
+                                                                            sorciereAction('kill', player.id);
+                                                                        }}
+                                                                        className="bg-pink-600/20 hover:bg-pink-600/40 border border-pink-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                                                    >
+                                                                        {player.name}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
+
+                                                    {currentPlayer.sorciereKillUsed && (
+                                                        <div className="bg-gray-500/20 border border-gray-500 text-gray-300 px-4 py-2 rounded-xl mb-2">
+                                                            Potion de mort déjà utilisée
+                                                        </div>
+                                                    )}
+
+                                                    {!currentPlayer.hasActed && (
+                                                        <button
+                                                            onClick={() => sorciereAction('pass')}
+                                                            className="w-full bg-gray-600/20 hover:bg-gray-600/40 border border-gray-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                                        >
+                                                            Passer mon tour
+                                                        </button>
+                                                    )}
+
+                                                    {currentPlayer.hasActed && (
+                                                        <div className="bg-green-500/20 border border-green-500 text-green-300 px-4 py-3 rounded-xl mt-3">
+                                                            <Check className="w-5 h-5 inline mr-2" />Action effectuée
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {currentPlayer.role === 'villageois' && (
+                                        <div className="bg-blue-500/20 border border-blue-500 text-blue-300 px-4 py-3 rounded-xl">
+                                            <AlertCircle className="w-5 h-5 inline mr-2" />
+                                            Vous êtes un simple villageois. Attendez le jour pour voter.
+                                        </div>
+                                    )}
+
+                                    {currentPlayer.role === 'chasseur' && (
+                                        <div className="bg-yellow-500/20 border border-yellow-500 text-yellow-300 px-4 py-3 rounded-xl">
+                                            <Target className="w-5 h-5 inline mr-2" />
+                                            Vous êtes le chasseur. Votre pouvoir s'active si vous mourrez.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {gameState.phase === 'chooseSuccessor' && (() => {
+                                const deadLeader = gameState.players.find(p => p.id === gameState.deadLeaderId);
+                                const isDeadLeader = currentPlayer?.id === gameState.deadLeaderId;
+                                return (
+                                    <div className="bg-yellow-50 backdrop-blur-xl p-6 rounded-3xl border border-yellow-400 mb-6">
+                                        <h3 className="text-xl font-bold text-gray-900 mb-4">
+                                            👑 Succession du Chef de Village
+                                        </h3>
+                                        <p className="text-gray-700 mb-4">
+                                            {isDeadLeader ?
+                                                `Vous êtes le chef ${deadLeader?.name}. Choisissez votre successeur :` :
+                                                `Le chef ${deadLeader?.name} choisit son successeur...`
+                                            }
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {alivePlayers.map(player => (
+                                                <button
+                                                    key={player.id}
+                                                    onClick={() => isDeadLeader ? chooseSuccessor(player.id) : null}
+                                                    disabled={!isDeadLeader}
+                                                    className={`px-4 py-3 rounded-xl font-bold transition ${isDeadLeader
+                                                        ? 'bg-yellow-600/20 hover:bg-yellow-600/40 border border-yellow-500 text-gray-900 cursor-pointer'
+                                                        : 'bg-gray-200 border border-gray-300 text-gray-500 cursor-not-allowed'
+                                                        }`}
+                                                >
+                                                    👑 {player.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {!isDeadLeader && (
+                                            <div className="mt-4 bg-blue-500/20 border border-blue-500 text-blue-700 px-4 py-3 rounded-xl">
+                                                ℹ️ Seul le chef peut choisir son successeur
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
+                            {gameState.phase === 'voteLeader' && currentPlayer?.isAlive && (
+                                <div className="bg-yellow-50 backdrop-blur-xl p-6 rounded-3xl border border-yellow-400 mb-6">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-4">
+                                        👑 Élection du Chef de Village - {leaderVoteTimer}s
+                                    </h3>
+                                    <p className="text-gray-700 mb-4">Le chef aura 2 voix lors des votes d'élimination !</p>
+                                    {!currentPlayer.hasVoted ? (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                                {alivePlayers.filter(p => p.id !== currentPlayer.id).map(player => (
+                                                    <button
+                                                        key={player.id}
+                                                        onClick={() => setSelectedLeader(player.id)}
+                                                        className={`px-4 py-3 rounded-xl font-bold transition ${selectedLeader === player.id
+                                                            ? 'bg-yellow-600 border-2 border-yellow-700 text-white scale-105 shadow-lg'
+                                                            : 'bg-yellow-600/20 hover:bg-yellow-600/40 border border-yellow-500 text-gray-900'
+                                                            }`}
+                                                    >
+                                                        👑 {player.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {selectedLeader && (
+                                                <button
+                                                    onClick={() => {
+                                                        voteForLeader(selectedLeader);
+                                                        setSelectedLeader(null);
+                                                    }}
+                                                    className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 text-white py-4 rounded-2xl font-bold hover:from-yellow-500 hover:to-orange-500 transition shadow-lg mb-4"
+                                                >
+                                                    ✅ Confirmer mon vote pour {alivePlayers.find(p => p.id === selectedLeader)?.name}
+                                                </button>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="bg-green-500/20 border border-green-500 text-green-700 px-4 py-3 rounded-xl mb-4">
+                                            <Check className="w-5 h-5 inline mr-2" />
+                                            Vous avez voté - Attendez la fin du vote
+                                        </div>
+                                    )}
+
+                                    {/* Affichage des votes en temps réel */}
+                                    {gameState.leaderVotes && Object.keys(gameState.leaderVotes).length > 0 && (
+                                        <div className="bg-white/50 p-4 rounded-xl">
+                                            <h4 className="font-bold text-gray-900 mb-2">📊 Votes en cours :</h4>
+                                            {(() => {
+                                                const voteCounts = {};
+                                                const votersFor = {};
+                                                Object.entries(gameState.leaderVotes).forEach(([voterId, candidateId]) => {
+                                                    voteCounts[candidateId] = (voteCounts[candidateId] || 0) + 1;
+                                                    if (!votersFor[candidateId]) votersFor[candidateId] = [];
+                                                    const voter = gameState.players.find(p => p.id === voterId);
+                                                    if (voter) votersFor[candidateId].push(voter.name);
+                                                });
+                                                return Object.entries(voteCounts).map(([candidateId, count]) => {
+                                                    const candidate = gameState.players.find(p => p.id === candidateId);
+                                                    return (
+                                                        <div key={candidateId} className="mb-1 text-gray-800">
+                                                            <span className="font-semibold">{candidate?.name}:</span> {count} vote(s)
+                                                            <span className="text-sm text-gray-600"> ({votersFor[candidateId]?.join(', ')})</span>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {gameState.phase === 'day' && isHost && (
+                                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-gray-300 mb-6">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-4">☀️ Discussion du Village</h3>
+                                    <p className="text-gray-700 mb-4">Discutez entre vous pour identifier les loups-garous !</p>
+                                    {gameState.villageLeader && (() => {
+                                        const leader = gameState.players.find(p => p.id === gameState.villageLeader);
+                                        return leader && (
+                                            <p className="text-yellow-600 font-bold mb-4">👑 Chef du village : {leader.name} (2 voix)</p>
+                                        );
+                                    })()}
+                                    <button onClick={startVoting} className="w-full bg-gradient-to-r from-orange-600 to-red-600 text-white py-4 rounded-2xl font-bold hover:from-orange-500 hover:to-red-500 transition">
+                                        Passer au Vote →
+                                    </button>
+                                </div>
+                            )}
+
+                            {gameState.phase === 'vote' && currentPlayer?.isAlive && (
+                                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-gray-300 mb-6">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-4">
+                                        🗳️ Vote d'Élimination - {voteTimer}s
+                                    </h3>
+                                    {!currentPlayer.hasVoted ? (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {alivePlayers.filter(p => p.id !== currentPlayer.id).map(player => (
+                                                <button
+                                                    key={player.id}
+                                                    onClick={() => vote(player.id)}
+                                                    className="bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500 text-gray-900 px-4 py-3 rounded-xl font-bold transition"
+                                                >
+                                                    {player.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="bg-green-500/20 border border-green-500 text-green-700 px-4 py-3 rounded-xl">
+                                            <Check className="w-5 h-5 inline mr-2" />
+                                            Vous avez voté - Attendez la fin du vote
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {gameState.phase === 'tiebreak' && isHost && (
+                                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-gray-300 mb-6">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-4">
+                                        👑 Égalité ! Chef du village, départagez !
+                                    </h3>
+                                    <p className="text-gray-700 mb-4">Choisissez qui sera éliminé :</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {gameState.tiedPlayers.map(playerId => {
+                                            const player = gameState.players.find(p => p.id === playerId);
+                                            return (
+                                                <button
+                                                    key={playerId}
+                                                    onClick={() => tiebreakVote(playerId)}
+                                                    className="bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                                >
+                                                    ☠️ {player?.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {gameState.phase === 'chasseur' && currentPlayer?.id === gameState.chasseurId && (
+                                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-gray-300 mb-6">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-4">🎯 Chasseur - Dernier Tir !</h3>
+                                    <p className="text-red-600 font-bold mb-4">Vous êtes mort ! Choisissez qui emporter avec vous :</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {alivePlayers.filter(p => p.id !== currentPlayer.id).map(player => (
+                                            <button
+                                                key={player.id}
+                                                onClick={() => chasseurShoot(player.id)}
+                                                className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-3 rounded-xl font-bold transition"
+                                            >
+                                                🎯 {player.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {gameState.phase === 'dayTransition' && (
+                                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-gray-300 mb-6 text-center">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-4">
+                                        ⏳ Passage à la nuit dans {gameState.transitionTimer}s...
+                                    </h3>
+                                </div>
+                            )}
+
+                            <div className="bg-black/40 backdrop-blur-xl p-6 rounded-3xl border border-white/20">
+                                <h3 className={`text-xl font-bold ${textColor} mb-4`}>Joueurs</h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {gameState.players.map(player => (
+                                        <div key={player.id} className={`border rounded-xl px-4 py-3 ${player.isAlive ? 'bg-white/5 border-white/10' : 'bg-red-500/10 border-red-500/30 opacity-50'}`}>
+                                            <div className="flex items-center justify-between">
+                                                <span className={textColor}>{player.name}</span>
+                                                {!player.isAlive && <Skull className="w-5 h-5 text-red-400" />}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return null;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(<LoupGarou />);
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./service-worker.js').then(r => console.log('✅ SW:', r.scope)).catch(e => console.log('❌ SW:', e));
+        }
+    </script>
+</body>
+
+
+</html>
